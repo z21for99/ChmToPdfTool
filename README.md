@@ -2,6 +2,8 @@
 
 A self-contained Windows desktop application that converts Microsoft Compiled HTML Help (.chm) files to PDF, preserving the original table of contents as PDF bookmarks.
 
+> **Download**: Get the ready-to-run EXE from the [latest release](https://github.com/z21for99/ChmToPdfTool/releases/latest). No installation required — just double-click.
+
 ## Table of Contents
 
 - [Usage](#usage)
@@ -25,6 +27,13 @@ A self-contained Windows desktop application that converts Microsoft Compiled HT
 - [License](#license)
 
 ## Usage
+
+### Quick Start
+
+1. Download `CHM转PDF.exe` from the [Releases page](https://github.com/z21for99/ChmToPdfTool/releases/latest).
+2. Double-click to launch.
+3. Drag and drop a `.chm` file, or click **浏览** to browse.
+4. Click **开始转换**.
 
 ### GUI Mode
 
