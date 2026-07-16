@@ -1,0 +1,24 @@
+# Build artifacts
+bin/
+obj/
+*.exe
+*.dll
+*.pdb
+*.cache
+*.user
+*.suo
+
+# Delivery package (large binary)
+交付包/
+
+# Temporary publish output
+publish/
+
+# IDE
+.vs/
+.vscode/
+*.DotSettings.user
+
+# OS
+Thumbs.db
+Desktop.ini

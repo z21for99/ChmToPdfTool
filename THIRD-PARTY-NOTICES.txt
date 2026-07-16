@@ -1,0 +1,23 @@
+Third-party notices
+===================
+
+SharpSevenZip
+-------------
+https://github.com/JeremyAnsel/SharpSevenZip
+Licensed under LGPL-3.0-or-later.
+
+7-Zip
+-----
+https://www.7-zip.org/
+7-Zip is free software. Most of the source code is under the GNU LGPL.
+Some parts use BSD 3-clause and unRAR license terms. See the 7-Zip project
+for complete licensing details.
+
+PdfSharpCore
+------------
+https://github.com/ststeiger/PdfSharpCore
+See the package and repository for its license terms.
+
+System.Text.Encoding.CodePages
+------------------------------
+Copyright .NET Foundation and contributors. Licensed under the MIT License.
