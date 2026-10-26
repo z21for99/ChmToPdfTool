@@ -54,26 +54,71 @@ public sealed class PauseController : IDisposable
     public void Dispose() => Resume();
 }
 
+public sealed record TocEntry(string Title, string Path);
+
 public static partial class TocParser
 {
-    public static IReadOnlyList<string> ParseLocalPaths(string content)
+    public static IReadOnlyList<TocEntry> ParseEntries(string content)
     {
-        var paths = new List<string>();
+        var entries = new List<TocEntry>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (Match match in LocalParameterRegex().Matches(content))
+        foreach (Match match in SitemapRegex().Matches(content))
         {
-            var capturedValue = match.Groups[1].Success
-                ? match.Groups[1].Value
-                : match.Groups[2].Value;
-            var path = Normalize(capturedValue);
-            if (path.Length > 0 && seen.Add(path))
+            var block = match.Groups[1].Value;
+            var local = ReadParameter(block, "Local");
+            if (local is null)
             {
-                paths.Add(path);
+                continue;
+            }
+
+            var path = Normalize(local);
+            if (path.Length == 0 || !seen.Add(path))
+            {
+                continue;
+            }
+
+            var title = ReadParameter(block, "Name") ?? string.Empty;
+            entries.Add(new TocEntry(WebUtility.HtmlDecode(title).Trim(), path));
+        }
+
+        return entries;
+    }
+
+    public static IReadOnlyList<string> ParseLocalPaths(string content) =>
+        ParseEntries(content).Select(entry => entry.Path).ToList();
+
+    private static string? ReadParameter(string block, string parameterName)
+    {
+        foreach (Match match in ParameterRegex().Matches(block))
+        {
+            string? name = null;
+            string? value = null;
+
+            foreach (Match attribute in AttributeRegex().Matches(match.Value))
+            {
+                var attributeName = attribute.Groups["name"].Value;
+                var attributeValue = attribute.Groups["value"].Success
+                    ? attribute.Groups["value"].Value
+                    : attribute.Groups["unquoted"].Value;
+
+                if (string.Equals(attributeName, "name", StringComparison.OrdinalIgnoreCase))
+                {
+                    name = attributeValue;
+                }
+                else if (string.Equals(attributeName, "value", StringComparison.OrdinalIgnoreCase))
+                {
+                    value = attributeValue;
+                }
+            }
+
+            if (value is not null && string.Equals(name, parameterName, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
             }
         }
 
-        return paths;
+        return null;
     }
 
     private static string Normalize(string value)
@@ -95,10 +140,16 @@ public static partial class TocParser
         return path.TrimStart('/');
     }
 
+    [GeneratedRegex(@"<object\b[^>]*>(.*?)</object>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant)]
+    private static partial Regex SitemapRegex();
+
+    [GeneratedRegex(@"<param\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ParameterRegex();
+
     [GeneratedRegex(
-        "<param\\s+[^>]*name\\s*=\\s*[\\\"']?Local[\\\"']?[^>]*value\\s*=\\s*[\\\"']([^\\\"']+)[\\\"'][^>]*>|<param\\s+[^>]*value\\s*=\\s*[\\\"']([^\\\"']+)[\\\"'][^>]*name\\s*=\\s*[\\\"']?Local[\\\"']?[^>]*>",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex LocalParameterRegex();
+        "(?<name>[A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*(?:\"(?<value>[^\"]*)\"|'(?<value>[^']*)'|(?<unquoted>[^\\s>]+))",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex AttributeRegex();
 }
 
 public static class PageDiscovery

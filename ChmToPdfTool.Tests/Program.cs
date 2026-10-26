@@ -27,6 +27,46 @@ Run("HHC order and duplicate removal", () =>
     AssertSequence(result, ["intro.htm", "chapters/one.html", "appendix.htm"]);
 });
 
+Run("TOC entry titles", () =>
+{
+    const string hhc = """
+        <UL>
+          <LI><OBJECT type="text/sitemap">
+            <param name="Name" value="Intro &amp; Overview">
+            <param name="Local" value="intro.htm">
+          </OBJECT></LI>
+          <LI><OBJECT type="text/sitemap">
+            <param value="chapters/one.html" name="Local">
+            <param value="Chapter One" name="Name">
+          </OBJECT></LI>
+        </UL>
+        """;
+
+    var entries = TocParser.ParseEntries(hhc);
+    AssertSequence(entries.Select(entry => entry.Title).ToList(), ["Intro & Overview", "Chapter One"]);
+    AssertSequence(entries.Select(entry => entry.Path).ToList(), ["intro.htm", "chapters/one.html"]);
+});
+
+Run("Page title ignores commented template", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), "chm-title-" + Guid.NewGuid().ToString("N") + ".html");
+    File.WriteAllText(path, """
+        <!--DXMETADATA start type="ItemTitle" format="<title>%%ItemTitle%%</title>" --><title>Introduction</title><!--DXMETADATA end-->
+        """);
+    try
+    {
+        var title = HtmlMetadata.ReadTitle(path);
+        if (title != "Introduction")
+        {
+            throw new InvalidOperationException($"Expected 'Introduction', got '{title}'.");
+        }
+    }
+    finally
+    {
+        File.Delete(path);
+    }
+});
+
 Run("Fallback page discovery", () =>
 {
     var root = Path.Combine(Path.GetTempPath(), "chm-pdf-tests-" + Guid.NewGuid());

@@ -61,7 +61,8 @@ The CLI prints progress to stdout and errors to stderr. Exit code `0` means succ
 ## Features
 
 - Extracts and renders every HTML page inside the CHM archive.
-- Preserves the original table of contents (`.hhc`) as PDF outline bookmarks; falls back to alphabetical path order when no TOC is found.
+- Preserves the original table of contents (`.hhc`) as PDF outline bookmarks, using the TOC labels as bookmark titles; falls back to the page `<title>`, then to alphabetical path order, when no TOC is found.
+- Prints A4 pages by default (pages that declare their own CSS `@page` size keep it); without an explicit paper size Chromium would fall back to US Letter.
 - Detects text encoding automatically (UTF-8, UTF-16 LE/BE, GBK / Code Page 936, and charset declarations inside HTML `<meta>` tags).
 - Prints backgrounds, images, tables, and CSS styles from the original pages.
 - Pause and resume during long conversions without losing progress.

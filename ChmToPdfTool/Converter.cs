@@ -38,12 +38,14 @@ public sealed class ChmConverter
             progress?.Report(new ConversionProgress(0, 1, "正在解包 CHM..."));
             await ExtractAsync(chmPath, extractedDirectory, cancellationToken);
 
-            var tocPaths = ReadToc(extractedDirectory);
-            var pages = PageDiscovery.Discover(extractedDirectory, tocPaths);
+            var tocEntries = ReadToc(extractedDirectory);
+            var pages = PageDiscovery.Discover(extractedDirectory, tocEntries.Select(entry => entry.Path).ToList());
             if (pages.Count == 0)
             {
                 throw new InvalidOperationException("CHM 中没有找到可转换的 HTML 页面。");
             }
+
+            var bookmarkTitles = BuildBookmarkTitles(extractedDirectory, tocEntries);
 
             await using var session = await EdgePdfSession.CreateAsync(
                 edgePath,
@@ -67,7 +69,7 @@ public sealed class ChmConverter
                     $"正在转换 {index + 1}/{pages.Count}: {Path.GetFileName(page)}"));
 
                 await session.PrintAsync(page, pagePdf, cancellationToken);
-                renderedPdfs.Add((pagePdf, HtmlMetadata.ReadTitle(page)));
+                renderedPdfs.Add((pagePdf, ResolveTitle(bookmarkTitles, page)));
             }
 
             progress?.Report(new ConversionProgress(pages.Count, pages.Count, "正在合并 PDF..."));
@@ -127,6 +129,11 @@ public sealed class ChmConverter
         catch (Exception sharpSevenZipError)
         {
             var hhError = await TryExtractWithWindowsHelpAsync(chmPath, extractedDirectory, cancellationToken);
+            if (hhError is null)
+            {
+                return;
+            }
+
             throw new InvalidOperationException(
                 "CHM 解包失败。文件可能损坏、被加密或采用了不兼容格式。" +
                 Environment.NewLine +
@@ -172,14 +179,48 @@ public sealed class ChmConverter
         }
     }
 
-    private static IReadOnlyList<string> ReadToc(string extractedDirectory)
+    private static IReadOnlyList<TocEntry> ReadToc(string extractedDirectory)
     {
         var hhc = Directory
             .EnumerateFiles(extractedDirectory, "*.hhc", SearchOption.AllDirectories)
             .OrderBy(path => path.Length)
             .FirstOrDefault();
 
-        return hhc is null ? [] : TocParser.ParseLocalPaths(SmartTextReader.ReadAllText(hhc));
+        return hhc is null ? [] : TocParser.ParseEntries(SmartTextReader.ReadAllText(hhc));
+    }
+
+    /// <summary>
+    /// Maps each page to the label the CHM's own table of contents uses. The HTML
+    /// &lt;title&gt; is only a fallback: help compilers often emit a template
+    /// placeholder there, and many topics repeat the same title.
+    /// </summary>
+    private static Dictionary<string, string> BuildBookmarkTitles(
+        string extractedDirectory,
+        IReadOnlyList<TocEntry> tocEntries)
+    {
+        var titles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in tocEntries)
+        {
+            if (entry.Title.Length == 0)
+            {
+                continue;
+            }
+
+            var fullPath = Path.GetFullPath(Path.Combine(extractedDirectory, entry.Path));
+            titles.TryAdd(fullPath, entry.Title);
+        }
+
+        return titles;
+    }
+
+    private static string ResolveTitle(IReadOnlyDictionary<string, string> tocTitles, string page)
+    {
+        if (tocTitles.TryGetValue(Path.GetFullPath(page), out var title))
+        {
+            return title;
+        }
+
+        return HtmlMetadata.ReadTitle(page);
     }
 
     private static void MergePdfs(IReadOnlyList<(string PdfPath, string Title)> inputs, string outputPdf)
@@ -311,7 +352,12 @@ internal sealed class EdgePdfSession : IAsyncDisposable
         {
             printBackground = true,
             displayHeaderFooter = false,
+            // Tell Chromium the paper explicitly: with preferCSSPageSize the page's
+            // own @page rule still wins, but pages that declare nothing used to fall
+            // back to US Letter (612x792pt). A4 is 8.27 x 11.69 inches.
             preferCSSPageSize = true,
+            paperWidth = 8.27,
+            paperHeight = 11.69,
         }, cancellationToken);
 
         if (!result.TryGetProperty("data", out var dataProp))
@@ -489,15 +535,35 @@ public static class SmartTextReader
 
 public static class HtmlMetadata
 {
+    private static readonly Regex CommentPattern = new(
+        "<!--.*?-->",
+        RegexOptions.Singleline | RegexOptions.CultureInvariant);
+
+    private static readonly Regex WhitespacePattern = new(
+        "\\s+",
+        RegexOptions.CultureInvariant);
+
     public static string ReadTitle(string path)
     {
         try
         {
             var html = SmartTextReader.ReadAllText(path);
+            // Help compilers (Sandcastle/MSHV) leave the title template in an HTML
+            // comment, so the first <title> in the file is often a placeholder such
+            // as %%ItemTitle%%. Blank out comments before looking for the real one.
+            html = CommentPattern.Replace(html, " ");
+
             var match = Regex.Match(html, "<title[^>]*>(.*?)</title>",
                 RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
             if (match.Success)
-                return WebUtility.HtmlDecode(Regex.Replace(match.Groups[1].Value, "<[^>]+>", string.Empty)).Trim();
+            {
+                var title = WebUtility.HtmlDecode(Regex.Replace(match.Groups[1].Value, "<[^>]+>", " ")).Trim();
+                title = WhitespacePattern.Replace(title, " ");
+                if (title.Length > 0 && !title.Contains("%%", StringComparison.Ordinal))
+                {
+                    return title;
+                }
+            }
         }
         catch { }
 
