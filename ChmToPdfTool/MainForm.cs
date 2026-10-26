@@ -16,7 +16,9 @@ public sealed class MainForm : Form
     private readonly Label _status = new();
     private readonly TextBox _log = new();
     private readonly Panel _dropZone = new();
+    private readonly Label _dropHint = new();
     private CancellationTokenSource? _cancellation;
+    private bool _dragDropEnabled;
 
     public MainForm()
     {
@@ -26,14 +28,48 @@ public sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(245, 247, 250);
         Font = new Font("Microsoft YaHei UI", 9F);
-        AllowDrop = true;
 
         BuildInterface();
         DragEnter += HandleDragEnter;
         DragDrop += HandleDragDrop;
         _dropZone.DragEnter += HandleDragEnter;
         _dropZone.DragDrop += HandleDragDrop;
-        _dropZone.AllowDrop = true;
+    }
+
+    protected override void OnLoad(EventArgs eventArgs)
+    {
+        base.OnLoad(eventArgs);
+        EnableDragDrop();
+    }
+
+    /// <summary>
+    /// Registering the OLE drop target can fail for reasons outside our control
+    /// (another component already initialised the thread as MTA, a shell extension
+    /// blocked RegisterDragDrop, ...). WinForms surfaces that as an
+    /// ExternalException, and letting it escape used to kill the app before the
+    /// window was even visible. Drag and drop is a convenience here, so treat a
+    /// failure as "feature disabled" and keep the browse button working.
+    /// </summary>
+    private void EnableDragDrop()
+    {
+        var failures = new List<string>();
+
+        try { AllowDrop = true; }
+        catch (Exception exception) { failures.Add($"窗口: 0x{exception.HResult:X8} {exception.Message}"); }
+
+        try { _dropZone.AllowDrop = true; }
+        catch (Exception exception) { failures.Add($"拖放区: 0x{exception.HResult:X8} {exception.Message}"); }
+
+        _dragDropEnabled = failures.Count == 0;
+        if (_dragDropEnabled)
+        {
+            return;
+        }
+
+        AppendLog("拖放功能不可用，请改用“浏览...”按钮选择文件。");
+        AppendLog($"原因（线程单元 {Thread.CurrentThread.GetApartmentState()}）：{string.Join("；", failures)}");
+        _dropHint.Text = "拖放不可用，请点击“浏览...”选择文件";
+        _dropHint.ForeColor = Color.FromArgb(180, 60, 60);
     }
 
     private void BuildInterface()
@@ -90,14 +126,12 @@ public sealed class MainForm : Form
         _dropZone.Margin = new Padding(0, 0, 0, 12);
         _dropZone.BackColor = Color.White;
         _dropZone.Paint += (_, eventArgs) => PaintDropZone(eventArgs.Graphics);
-        _dropZone.Controls.Add(new Label
-        {
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Text = "将 .chm 文件拖到这里",
-            ForeColor = Color.FromArgb(80, 98, 123),
-            Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold),
-        });
+        _dropHint.Dock = DockStyle.Fill;
+        _dropHint.TextAlign = ContentAlignment.MiddleCenter;
+        _dropHint.Text = "将 .chm 文件拖到这里";
+        _dropHint.ForeColor = Color.FromArgb(80, 98, 123);
+        _dropHint.Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold);
+        _dropZone.Controls.Add(_dropHint);
         layout.Controls.Add(_dropZone, 0, 0);
 
         layout.Controls.Add(CreatePathRow("CHM 文件", _inputPath, BrowseInput), 0, 1);
@@ -251,14 +285,14 @@ public sealed class MainForm : Form
 
     private void HandleDragEnter(object? sender, DragEventArgs eventArgs)
     {
-        eventArgs.Effect = TryGetChm(eventArgs.Data, out _)
+        eventArgs.Effect = _dragDropEnabled && TryGetChm(eventArgs.Data, out _)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
     }
 
     private void HandleDragDrop(object? sender, DragEventArgs eventArgs)
     {
-        if (TryGetChm(eventArgs.Data, out var path))
+        if (_dragDropEnabled && TryGetChm(eventArgs.Data, out var path))
         {
             SetInput(path);
         }

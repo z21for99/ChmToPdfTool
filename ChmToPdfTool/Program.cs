@@ -26,8 +26,29 @@ internal static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, eventArgs) => ReportUnhandled(eventArgs.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) => ReportUnhandled(eventArgs.ExceptionObject as Exception);
         Application.Run(new MainForm());
         return 0;
+    }
+
+    private static void ReportUnhandled(Exception? exception)
+    {
+        var message = exception?.Message ?? "未知错误。";
+        try
+        {
+            MessageBox.Show(
+                $"{message}{Environment.NewLine}{Environment.NewLine}" +
+                $"类型：{exception?.GetType().Name}，HRESULT：0x{exception?.HResult:X8}",
+                "CHM 转 PDF - 意外错误",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch
+        {
+            // Nothing sensible to do if even the message box fails.
+        }
     }
 
     private static async Task<int> ConvertFromCommandLineAsync(string input, string output)
