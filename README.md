@@ -30,14 +30,16 @@ A self-contained Windows desktop application that converts Microsoft Compiled HT
 
 ### Quick Start
 
-1. Download `CHM转PDF.exe` from the [Releases page](https://github.com/z21for99/ChmToPdfTool/releases/latest).
+1. Download `ChmToPdf-v1.1.exe` from the [Releases page](https://github.com/z21for99/ChmToPdfTool/releases/latest).
 2. Double-click to launch.
 3. Drag and drop a `.chm` file, or click **浏览** to browse.
 4. Click **开始转换**.
 
+> The release asset has an ASCII name so browsers and GitHub do not mangle it; it is the same application, and you can rename it freely.
+
 ### GUI Mode
 
-1. Double-click `CHM转PDF.exe`.
+1. Double-click the downloaded `.exe`.
 2. Select a `.chm` file using the **Browse** button, or **drag and drop** a `.chm` file directly into the window.
 3. Choose an output PDF path.
 4. Click **开始转换** to begin.
@@ -47,7 +49,7 @@ A self-contained Windows desktop application that converts Microsoft Compiled HT
 ### Command Line Mode
 
 ```powershell
-CHM转PDF.exe --convert "input.chm" "output.pdf"
+ChmToPdf-v1.1.exe --convert "input.chm" "output.pdf"
 ```
 
 The CLI prints progress to stdout and errors to stderr. Exit code `0` means success.
